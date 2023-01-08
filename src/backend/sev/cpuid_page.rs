@@ -162,15 +162,32 @@ impl CpuidPage {
                 ..Default::default()
             };
 
-            if snp_cpuid_entry.eax_in == 0xD
-                && (snp_cpuid_entry.ecx_in == 0x0 || snp_cpuid_entry.ecx_in == 0x1)
-            {
-                // Workaround copied from https://github.com/AMDESE/qemu/commit/9ad35600356a2fe1bb1aea6d5f95ea86d205b25d
+            // Check for the leafs that require workarounds.
+            match (snp_cpuid_entry.eax_in, snp_cpuid_entry.ecx_in) {
+                (0xD, 0x0 | 0x1) => {
+                    // Workaround copied from https://github.com/AMDESE/qemu/commit/9ad35600356a2fe1bb1aea6d5f95ea86d205b25d
 
-                // The value returned in EBX gives the save area size requirement in bytes based on the features
-                // currently enabled in the XFEATURE_ENABLED_MASK (XCR0).
+                    // The value returned in EBX gives the save area size requirement in bytes based on the features
+                    // currently enabled in the XFEATURE_ENABLED_MASK (XCR0).
 
-                snp_cpuid_entry.ebx = 0x240;
+                    snp_cpuid_entry.ebx = 0x240;
+                }
+                (0x7, 0x0) => {
+                    // Structured Extended Feature Identifiers
+
+                    // Disable IA32_TSC_ADJUST.
+                    snp_cpuid_entry.ebx &= !0x2;
+
+                    // TODO: What bits need to be disabled here?
+                    snp_cpuid_entry.edx = 0;
+                }
+                (0x80000008, 0x0) => {
+                    // Extended Feature Extensions ID
+
+                    // Disable the `virt_ssbd` bit.
+                    snp_cpuid_entry.ebx &= !0x200_0000;
+                }
+                _ => {}
             }
 
             self.add_entry(&snp_cpuid_entry)
