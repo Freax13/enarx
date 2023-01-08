@@ -2,6 +2,7 @@
 
 pub mod snp;
 
+use iocuddle::{Group, Ioctl, WriteRead};
 pub use snp::firmware::Firmware;
 
 mod builder;
@@ -38,14 +39,20 @@ struct SnpKeepPersonality {
 }
 
 impl KeepPersonality for SnpKeepPersonality {
-    fn map(vm_fd: &mut VmFd, region: &Region) -> io::Result<()> {
+    fn map(vm_fd: &mut VmFd, region: &Region, is_private: bool) -> io::Result<()> {
         let memory_region = kvm_enc_region {
             addr: region.1.as_ptr() as _,
             size: region.1.len() as _,
         };
         vm_fd
             .register_enc_memory_region(&memory_region)
-            .map_err(|e| io::Error::from_raw_os_error(e.errno()))
+            .map_err(|e| io::Error::from_raw_os_error(e.errno()))?;
+
+        if is_private {
+            set_memory_attributes(vm_fd, region.0.guest_phys_addr, region.0.memory_size, true)?;
+        }
+
+        Ok(())
     }
     fn enarxcall<'a>(
         &mut self,
@@ -76,6 +83,41 @@ impl KeepPersonality for SnpKeepPersonality {
             _ => return Ok(Some(Item::Enarxcall(enarxcall, data))),
         }
     }
+}
+
+/// Indicate to KVM whether to map shared or private pages into the guest.
+pub fn set_memory_attributes(
+    vm_fd: &mut VmFd,
+    guest_phys_addr: u64,
+    memory_size: u64,
+    private: bool,
+) -> Result<(), std::io::Error> {
+    // TODO: This should be part of `kvm_ioctls` once
+    // `KVM_SET_MEMORY_ATTRIBUTES` lands in the mainline kernel.
+
+    #[repr(C)]
+    pub struct KvmSetMemoryAttributes {
+        address: u64,
+        size: u64,
+        attributes: u64,
+        flags: u64,
+    }
+
+    let mut attributes = KvmSetMemoryAttributes {
+        address: guest_phys_addr,
+        size: memory_size,
+        attributes: u64::from(private) << 3,
+        flags: 0,
+    };
+
+    const KVM_SET_MEMORY_ATTRIBUTES: Ioctl<WriteRead, &KvmSetMemoryAttributes> =
+        unsafe { Group::new(0xAE).write_read::<KvmSetMemoryAttributes>(0xd3) };
+
+    KVM_SET_MEMORY_ATTRIBUTES.ioctl(vm_fd, &mut attributes)?;
+
+    assert!(attributes.size == 0);
+
+    Ok(())
 }
 
 pub struct Backend;
