@@ -222,3 +222,6 @@ rustix = { version = "0.35.10", features = ["std"], default-features = false }
 wasi-common = { git = "https://github.com/bytecodealliance/wasmtime", rev = "6f50ddaaf2ab8205b6e850361dd2cc662819f431", version = "2.0.0", default-features = false }
 wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", rev = "6f50ddaaf2ab8205b6e850361dd2cc662819f431", version = "2.0.0", features = ["sync"], default-features = false }
 wiggle = { git = "https://github.com/bytecodealliance/wasmtime", rev = "6f50ddaaf2ab8205b6e850361dd2cc662819f431", version = "2.0.0", default-features = false }
+
+[patch.crates-io]
+kvm-ioctls = { git = "https://github.com/Freax13/kvm-ioctls.git", rev = "d78d745" }
