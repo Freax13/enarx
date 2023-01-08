@@ -15,6 +15,7 @@ use std::sync::{Arc, RwLock};
 use std::{thread, time};
 
 use anyhow::{anyhow, Context, Error};
+use kvm_bindings::kvm_enable_cap;
 use kvm_ioctls::Kvm;
 use mmarinus::{perms, Map};
 use primordial::Page;
@@ -73,6 +74,17 @@ impl TryFrom<super::config::Config> for Builder {
             let vm_fd = kvm_fd
                 .create_vm()
                 .context("Failed to create a virtual machine")?;
+
+            // Enable KVM_CAP_UNMAPPED_PRIVATE_MEM.
+            const KVM_CAP_UNMAPPED_PRIVATE_MEM: u32 = 240;
+            vm_fd
+                .enable_cap(&kvm_enable_cap {
+                    cap: KVM_CAP_UNMAPPED_PRIVATE_MEM,
+                    flags: 0,
+                    args: [0; 4],
+                    pad: [0; 64],
+                })
+                .context("failed to enable UPM capability")?;
 
             let sev = retry(|| Firmware::open().context("Failed to open '/dev/sev'"))?;
             let launcher = Launcher::new(vm_fd, sev).context("SNP Launcher init failed")?;
